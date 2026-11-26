@@ -365,8 +365,8 @@ node tools/patch-pet-todo.mjs --restore  # 还原
 `patch-pet-todo-ui.mjs`：
 
 - **没有截止时间的待办按新添加的在最前面**（原生是旧的在前，越新的越往下）；
-- 右侧三个图标（✎ 改正文 / ⏰ 改期限 / ✕ 删）收窄、行内间距收紧，把宽度还给正文；
-- 清单 6 行 → 5 行，避免面板一直顶到桌宠身上；
+- 右侧三个图标（✎ 改正文 / ⏰ 改期限 / ✕ 删）收到很窄、行内间距压到 `.18em`，把宽度还给正文；
+- 清单 6 行 → 4 行，避免面板一直顶到桌宠身上；
 - 保存请求超时 20 秒 → 8 秒，且忙碌态一定复位、一定给提示——对话正在生成时点待办不会再像「点了没反应」。
 
 ```bash
@@ -376,7 +376,7 @@ node tools/patch-pet-todo-tall.mjs --restore  # 还原
 node tools/patch-pet-todo-ui.mjs              # 同上三种模式，参数一致
 ```
 
-标记分别是 `/* dsh-pet-todo-tall v1 */` 与 `/* dsh-pet-todo-ui v1 */`，备份后缀 `.pre-todotall.orig` / `.pre-todoui.orig`。清单 5 行仍在面板预留的高度预算内（`TODO_PANEL_METRICS` 取「清单+提示」与日历的较大值），所以桌宠窗口的上边距不用跟着改。
+标记分别是 `/* dsh-pet-todo-tall v1 */` 与 `/* dsh-pet-todo-ui v1 */`，备份后缀 `.pre-todotall.orig` / `.pre-todoui.orig`。清单 4 行仍在面板预留的高度预算内（`TODO_PANEL_METRICS` 取「清单+提示」与日历的较大值），所以桌宠窗口的上边距不用跟着改。
 
 注意排序那一条改的是**宿主**（`lib/index.js` 里的 `sortTodos`）——`/todos` 返回什么顺序，两端就显示什么顺序。宿主那半边要等 DSH 重新加载插件（或重启 DSH）才生效，只重启桌宠窗口不够。
 

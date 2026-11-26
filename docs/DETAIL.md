@@ -246,8 +246,8 @@ node tools/patch-pet-todo-tall.mjs --restore  # 用 .pre-todotall.orig 还原
 | 改动 | 为什么 |
 | --- | --- |
 | `sortTodos` / `sortTodoItems` 的 `a.createdAt - b.createdAt` → `b.createdAt - a.createdAt` | 没有截止时间的待办原来旧的在前，新加的直接沉底 |
-| ✎/⏰/✕ 三个按钮内边距与最小宽度收窄，行内 `gap` `.462em` → `.3em` | 三个图标在原面板里占了近三分之一宽，正文被挤得只剩几个字 |
-| `LIST_ROWS` 6 → 5 | 6 行时面板底部压到桌宠身上 |
+| ✎/⏰/✕ 三个按钮内边距与最小宽度收到 `0.12/0.08`、行内 `gap` `.462em` → `.18em` | 三个图标在原面板里占了近三分之一宽，正文被挤得只剩几个字 |
+| `LIST_ROWS` 6 → 4 | 6 行时面板底部压到桌宠身上 |
 | `AbortSignal.timeout(20000)` → `8000` | 保存请求卡住时禁用输入的时间太长 |
 | `mutate` 改成 try/finally，忙碌时给出「正在保存上一条」提示 | 原来 `busy` 只有一条下降路径、且点击被静默吞掉，对话生成期间点待办像「点了没反应」 |
 

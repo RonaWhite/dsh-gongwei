@@ -50,21 +50,21 @@ const EDITS = {
   ],
   rows: [
     'const LIST_ROWS = 6; /* dsh-pet-todo-tall v1 */ // 原来写死 2，一次只露两行，十几条待办根本翻不过来',
-    `const LIST_ROWS = 5; /* dsh-pet-todo-tall v1 */ // 原来写死 2；先提到 6 又压到桌宠，现在 5 行 ${MARKER}`,
+    `const LIST_ROWS = 4; /* dsh-pet-todo-tall v1 */ // 原来写死 2；先提到 6 会压到桌宠身上，收到 4 行 ${MARKER}`,
   ],
   icons: [
     [
       'padding:calc(var(--t)*0.308) calc(var(--t)*0.28);border-radius:.462em;cursor:pointer;flex:0 0 auto;min-width:calc(var(--t)*1.1)}',
-      `padding:calc(var(--t)*0.18) calc(var(--t)*0.14);border-radius:.462em;cursor:pointer;flex:0 0 auto;min-width:calc(var(--t)*0.85)} ${MARKER}`,
+      `padding:calc(var(--t)*0.12) calc(var(--t)*0.08);border-radius:.462em;cursor:pointer;flex:0 0 auto;min-width:calc(var(--t)*0.6)} ${MARKER}`,
     ],
     [
       'padding:calc(var(--t)*0.308) calc(var(--t)*0.385);border-radius:.462em;cursor:pointer;flex:0 0 auto;',
-      `padding:calc(var(--t)*0.18) calc(var(--t)*0.18);border-radius:.462em;cursor:pointer;flex:0 0 auto; ${MARKER}`,
+      `padding:calc(var(--t)*0.12) calc(var(--t)*0.08);border-radius:.462em;cursor:pointer;flex:0 0 auto; ${MARKER}`,
     ],
-    ['"min-width:calc(var(--t)*1.692)}"', '"min-width:calc(var(--t)*1.05)}"'],
+    ['"min-width:calc(var(--t)*1.692)}"', '"min-width:calc(var(--t)*0.7)}"'],
     [
       '.dsh-pet-todo-row{display:flex;align-items:center;gap:.462em}',
-      '.dsh-pet-todo-row{display:flex;align-items:center;gap:.3em}',
+      '.dsh-pet-todo-row{display:flex;align-items:center;gap:.18em}',
     ],
   ],
   timeout: ['signal: AbortSignal.timeout(20000),', `signal: AbortSignal.timeout(8000), ${MARKER}`],
