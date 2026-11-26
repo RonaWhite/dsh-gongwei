@@ -38,8 +38,8 @@ const WEB_CLIENT = 'lib/client.js';
 /** 每个文件要做的改动名。 */
 const PLAN = {
   [HOST_INDEX]: ['sort'],
-  [DESKTOP_CORE]: ['sort', 'rows', 'icons', 'timeout', 'mutate'],
-  [WEB_CLIENT]: ['rows', 'icons', 'timeout', 'mutate'],
+  [DESKTOP_CORE]: ['sort', 'rows', 'icons', 'hint', 'timeout', 'mutate'],
+  [WEB_CLIENT]: ['rows', 'icons', 'hint', 'timeout', 'mutate'],
 };
 
 /** 全部改动的定义：名称 → [锚点, 替换文本]。 */
@@ -66,6 +66,12 @@ const EDITS = {
       '.dsh-pet-todo-row{display:flex;align-items:center;gap:.462em}',
       '.dsh-pet-todo-row{display:flex;align-items:center;gap:.18em}',
     ],
+  ],
+  // 底部那句「离到期越近，我会提醒得越勤快～」用户不要了。直接 display:none 掉整行，
+  // 比清空文字干净——清空文字的话那行的上下 padding 仍会留一条空白。
+  hint: [
+    '.dsh-pet-todo-hint{margin-top:auto;',
+    `.dsh-pet-todo-hint{display:none;margin-top:auto; ${MARKER}`,
   ],
   timeout: ['signal: AbortSignal.timeout(20000),', `signal: AbortSignal.timeout(8000), ${MARKER}`],
   mutate: [
