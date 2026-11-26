@@ -2509,7 +2509,7 @@ export function apply(ctx) {
 
   /* ── 菜单 ── */
 
-  const MENU_LABELS = ['打个卡', '今天记录', '记条感想', '想学什么', '本周战绩', '写周报']
+  const MENU_LABELS = ['打个卡', '今天记录', '记条感想', '想学什么', '本周战绩']
 
   async function registerMenu() {
     if (base === null) base = resolveBase()
@@ -2562,11 +2562,10 @@ export function apply(ctx) {
       }
       return
     }
+    // 「本周战绩」和「写周报」原来各占一项，可弹出的几乎是同一张卡——差别只有「已归档」三个字
+    // 和有没有落盘。菜单里让用户在两个长得一样的东西之间选，本身就是多余的认知负担。
+    // 合成一项：看一眼本周，顺手把两份周报落盘（幂等，同一周反复点也只是覆盖同名文件）。
     if (label === '本周战绩') {
-      await say(weeklyBubble(now))
-      return
-    }
-    if (label === '写周报') {
       doReport(now, 'stat')
       doReport(now, 'article')
       await say(weeklyBubble(now, true))

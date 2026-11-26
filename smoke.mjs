@@ -1489,8 +1489,8 @@ async function bootWithEntries({ tag, entries, thoughts, llm, extra = {} }) {
   check('周报拒绝其他方法', badReportMethod.status === 405)
   const weeklyCard = await m.click('本周战绩')
   check('本周概览分行不塞原文', weeklyCard.text.includes('\n1. 出勤') && !weeklyCard.text.includes(LONG_ENTRY), weeklyCard)
-  const reportCard = await m.click('写周报')
-  check('归档气泡指向每周回顾', reportCard.text.includes('已归档') && reportCard.text.includes('每周回顾') && !reportCard.text.includes('.md'), reportCard)
+  // 「写周报」已并入「本周战绩」：看一眼就等于归档，气泡同时说明已存 + 指向每周回顾
+  check('本周战绩顺手归档并指向每周回顾', weeklyCard.text.includes('已归档') && weeklyCard.text.includes('每周回顾') && !weeklyCard.text.includes('.md'), weeklyCard)
 
   // ⑨ 空的一天：气泡是引导语，面板是空状态
   // 必须先停掉上面这个实例——它还在长轮询，会抢走下一个实例的点击事件。
