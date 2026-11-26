@@ -29,6 +29,34 @@
 
 如果你也在读研、坐班、或者正想把「记录」这件事捡回来，它可能适合你。
 
+## 长什么样
+
+<p align="center">
+  <img src="docs/images/menu.png" width="300" alt="桌宠右键菜单" />
+</p>
+
+<p align="center"><sub>右键小鱼，待办事项下面就是它那几项，不用进「更多」。</sub></p>
+
+打卡之后它会念一句；记录多了会自动压成编号摘要，末尾指路成长手记：
+
+| 点「今天记录」 | 点「写周报」 |
+| :---: | :---: |
+| <img src="docs/images/bubble-today.png" width="250" /> | <img src="docs/images/bubble-report.png" width="250" /> |
+
+设置页里两个面板，一个每日日记、一个每周回顾：
+
+| 成长手记 · 日记 | 成长手记 · 每周回顾 |
+| :---: | :---: |
+| <img src="docs/images/journal.png" width="380" /> | <img src="docs/images/weekly-review.png" width="380" /> |
+
+「想学的」是待办之外的素材库，不排期、不打岔：
+
+<p align="center">
+  <img src="docs/images/pool.png" width="560" alt="想学的池子" />
+</p>
+
+> 截图里的个人记录都做了打码处理。
+
 ## 为什么做这个
 
 起因很简单：我知道记录有用，但我不会每天主动打开笔记软件。而桌宠一直待在我的屏幕上——把入口放在那里，比多一个需要想起的 App 更容易活下来。
