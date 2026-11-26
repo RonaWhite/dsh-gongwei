@@ -106,6 +106,9 @@ function parseHm(value) {
 
 const fmtMin = (min) => `${pad2(Math.floor(min / 60))}:${pad2(min % 60)}`
 
+/** 把 '12:30,18:30' 这种多段配置切成数组（中英文逗号都认）。 */
+const splitQuiet = (value) => String(value ?? '').split(/[,，]/).map((s) => s.trim()).filter(Boolean)
+
 const WEEKDAY_NAMES = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 
 const isWeekend = (d) => d.getDay() === 0 || d.getDay() === 6
@@ -175,6 +178,29 @@ const DEFAULT_CONFIG = {
   stretchEnd: '18:00',
   /** 久坐提醒要不要同时推到微信（默认只弹桌宠气泡，免得一天十几条把手机刷满）。 */
   stretchToIm: false,
+  /**
+   * 喝水提醒：工作日每隔多少分钟提醒喝一次。0 = 关。
+   *
+   * 为什么也拿打卡时刻当锚点：这人不固定上班点（周一常下午两点多才来），
+   * 固定钟点会让「刚坐下就被催喝水」，而他是真的在工位时才需要被提醒。
+   * 间隔给 60 分钟而不是跟久坐一样的 50：水和活动错开，一天下来是交替响，
+   * 不会出现「刚被叫起来活动，三十秒后又被叫喝水」这种连珠炮。
+   */
+  waterEvery: 60,
+  waterStart: '09:30',
+  waterEnd: '21:00',
+  /** 喝水提醒要不要同时推到微信（默认只出声弹泡）。 */
+  waterToIm: false,
+  /**
+   * 静止时段：这段时间里一条提醒都不发（久坐、喝水、写记录、待办到期全部让路）。
+   *
+   * 用户的实际作息是 12:30 左右去吃饭、回来趴桌子午睡到两点，晚饭则从 18:30 吃到 19:30 左右，
+   * 所以默认给两段：12:30-14:00、18:30-19:30。可以写多段，起点和终点用逗号分隔、一一对应。
+   * 这不是「推迟十分钟」那种软避让，是彻底不打扰：到了窗口就把久坐/喝水的计时器推到现在，
+   * 出窗口后重新起算一个完整间隔，免得他一睁眼就被连着催两条。
+   */
+  quietStart: '12:30,18:30',
+  quietEnd: '14:00,19:30',
 }
 
 function emptyStore() {
@@ -915,6 +941,9 @@ export function apply(ctx) {
   async function notifyDueTodos(todos) {
     const opt = imOptIn()
     if (opt?.enabled !== true) return
+    // 静止时段（默认 12:30-14:00 吃饭+午睡）里待办提醒也要让路——用户说的是「任何提醒都不要」，
+    // 这里不像 tick 那样有统一的入口拦截（它是从待办同步里直接调的），所以单独挡一道。
+    if (inQuiet(new Date())) return
     const now = Date.now()
     for (const todo of todos) {
       const due = todo.dueAt
@@ -990,10 +1019,11 @@ export function apply(ctx) {
    * 这里选 desktop 是因为 gongwei 绑定的宠物（main/小鱼）display=desktop，显示门禁放行。
    * 用失败回退：万一 voiceTo 那次被拒（例如宠物临时切到别处），再发一次普通气泡，保证话不丢。
    */
-  async function sayWithVoice(text, voiceSurface = 'desktop') {
+  async function sayWithVoice(text, voiceSurface = 'desktop', durationMs = null) {
     const id = await ensurePet()
     if (id === '') return
-    const speakBody = { text: clip(text), duration: bubbleDuration(text), speak: true }
+    const duration = Number.isFinite(durationMs) && durationMs > 0 ? Math.round(durationMs) : bubbleDuration(text)
+    const speakBody = { text: clip(text), duration, speak: true }
     const result = await callPet(
       base,
       `${BROADCAST_PATH}?pet=${encodeURIComponent(id)}&surface=${encodeURIComponent(voiceSurface)}`,
@@ -2159,6 +2189,44 @@ export function apply(ctx) {
       store.config.stretchToIm = on
       applied.push(on ? '久坐提醒推微信：开' : '久坐提醒推微信：关')
     }
+    if (patch.waterEvery !== undefined) {
+      const n = Number(patch.waterEvery)
+      if (!Number.isInteger(n) || n < 0 || n > 480) return { ok: false, text: 'waterEvery 取 0（关）到 480 分钟。' }
+      store.config.waterEvery = n
+      applied.push(n === 0 ? '喝水提醒：关' : `喝水提醒每 ${n} 分钟`)
+    }
+    if (patch.waterStart !== undefined) {
+      if (parseHm(patch.waterStart) === null) return { ok: false, text: 'waterStart 要写成 HH:MM。' }
+      store.config.waterStart = patch.waterStart
+      applied.push(`喝水提醒起点 ${patch.waterStart}`)
+    }
+    if (patch.waterEnd !== undefined) {
+      if (parseHm(patch.waterEnd) === null) return { ok: false, text: 'waterEnd 要写成 HH:MM。' }
+      store.config.waterEnd = patch.waterEnd
+      applied.push(`喝水提醒终点 ${patch.waterEnd}`)
+    }
+    if (patch.waterToIm !== undefined) {
+      const on = patch.waterToIm === true || patch.waterToIm === 'true' || patch.waterToIm === 1
+      const off = patch.waterToIm === false || patch.waterToIm === 'false' || patch.waterToIm === 0
+      if (!on && !off) return { ok: false, text: 'waterToIm 只能是 true / false。' }
+      store.config.waterToIm = on
+      applied.push(on ? '喝水提醒推微信：开' : '喝水提醒推微信：关')
+    }
+    if (patch.quietStart !== undefined) {
+      const bad = splitQuiet(patch.quietStart).find((s) => parseHm(s) === null)
+      if (bad !== undefined) return { ok: false, text: 'quietStart 要写成 HH:MM，多段用逗号隔开（如 12:30,18:30）。' }
+      store.config.quietStart = splitQuiet(patch.quietStart).map((s) => fmtMin(parseHm(s))).join(',')
+      applied.push(`静止时段起点 ${store.config.quietStart}`)
+    }
+    if (patch.quietEnd !== undefined) {
+      const bad = splitQuiet(patch.quietEnd).find((s) => parseHm(s) === null)
+      if (bad !== undefined) return { ok: false, text: 'quietEnd 要写成 HH:MM，多段用逗号隔开（如 14:00,19:30）。' }
+      store.config.quietEnd = splitQuiet(patch.quietEnd).map((s) => fmtMin(parseHm(s))).join(',')
+      applied.push(`静止时段终点 ${store.config.quietEnd}`)
+    }
+    if (splitQuiet(store.config.quietStart).length !== splitQuiet(store.config.quietEnd).length) {
+      return { ok: false, text: '静止时段的起点和终点数量必须一致（多段用逗号隔开，一一对应）。' }
+    }
     saveStore(store)
     return { ok: true, text: applied.length === 0 ? '没有要改的字段。' : `已更新：${applied.join('、')}` }
   }
@@ -2616,6 +2684,61 @@ export function apply(ctx) {
   }
 
   /**
+   * 解析静止时段配置。允许写多段，用逗号分隔、起止一一对应：
+   *   quietStart='12:30,18:30' + quietEnd='14:00,19:30' → 两段窗口。
+   * 之所以做成多段而不是多组配置项：用户的需求就是「吃饭和午睡别吵我」，
+   * 这类时段天生是一串，堆成 quietStart/quietEnd/quietStart2/quietEnd2 会越来越脏。
+   * 任一段写坏了就整段丢弃，不影响其它段。
+   */
+  function quietWindows() {
+    const starts = splitQuiet(store.config.quietStart)
+    const ends = splitQuiet(store.config.quietEnd)
+    const windows = []
+    for (let i = 0; i < starts.length && i < ends.length; i++) {
+      const a = parseHm(starts[i])
+      const b = parseHm(ends[i])
+      if (a === null || b === null || a === b) continue
+      windows.push([a, b])
+    }
+    return windows
+  }
+
+  /**
+   * 现在是不是「一律别吵」的静止时段（默认 12:30-14:00 午饭午睡、18:30-19:30 晚饭）。
+   * 单段支持跨零点（start > end 时按「到午夜再到现在」判断），因为以后可能被改成 23:00-07:00。
+   */
+  function inQuiet(now) {
+    const windows = quietWindows()
+    if (windows.length === 0) return false
+    const m = now.getHours() * 60 + now.getMinutes()
+    for (const [a, b] of windows) {
+      if (a < b ? (m >= a && m < b) : (m >= a || m < b)) return true
+    }
+    return false
+  }
+
+  /**
+   * 进了静止时段就把所有提醒计时器推到「现在」，出窗口后重新起算一个完整间隔。
+   * 不这么做的话，回来那一刻久坐和喝水会同时到点，两条提醒一起砸过来。
+   */
+  function resetReminderTimers(now, key) {
+    const flags = store.flags[key] ?? {}
+    const next = { ...flags }
+    let touched = false
+    for (const name of ['stretch', 'water']) {
+      const state = flags[name]
+      if (state && typeof state.lastTs === 'number') {
+        next[name] = { ...state, lastTs: now.getTime() }
+        touched = true
+      }
+    }
+    if (touched) {
+      store.flags[key] = next
+      saveStore(store)
+    }
+  }
+
+  /**
    * 久坐提醒：按「今天打卡时刻」起算，每 stretchEvery 分钟喊一次起来走走。
    *
    * 为什么锚在打卡而不是固定钟点：这人来得晚（周一常下午两点多），固定 09:30 起算会让
@@ -2635,13 +2758,9 @@ export function apply(ctx) {
     const endAt = parseHm(store.config.stretchEnd)
     if (startAt === null || endAt === null) return
     const minutes = now.getHours() * 60 + now.getMinutes()
-    // 午休：只把计时器推到当前，不提醒也不累计
-    if (minutes >= 12 * 60 && minutes < 13 * 60 + 30) {
-      const stretch = store.flags[key]?.stretch
-      if (stretch && typeof stretch.lastTs === 'number') {
-        store.flags[key] = { ...store.flags[key], stretch: { ...stretch, lastTs: now.getTime() } }
-        saveStore(store)
-      }
+    // 静止时段（默认 12:30-14:00 吃饭+午睡）：一条都不发，计时器推到当前，出窗口重新起算
+    if (inQuiet(now)) {
+      resetReminderTimers(now, key)
       return
     }
     if (minutes < startAt || minutes > endAt) return
@@ -2660,14 +2779,18 @@ export function apply(ctx) {
     store.flags[key] = { ...store.flags[key], stretch: { lastTs: now.getTime(), count } }
     saveStore(store)
     const text = stretchText(count, every)
-    await say(text)
+    // 用「出声」版而不是普通气泡：2026-11-26 用户反馈 50 分钟提醒他完全没感知到。
+    // 查下来提醒其实准点发了 6 次（桌宠日志里 14:20/16:50 都能看到气泡输入区，
+    // 说明气泡真的渲染了），但气泡只在屏幕角落停 6~22 秒，他一投入就看不见。
+    // 出声 + 停久一点才能打断他，所以这里改走 sayWithVoice 并给 40 秒停留；
+    // sayWithVoice 被拒（宠物不在桌面端）时会自动退回普通气泡，话不会丢。
+    await sayWithVoice(text, 'desktop', 40_000)
     if (store.config.stretchToIm === true && imOptIn()?.enabled === true) {
       await imNotifier.send(`stretch:${key}:${count}`, `小鱼提醒：${text}`)
     }
   }
 
-  /** 久坐提醒的措辞：轮换几套，避免一天里同一句话刷八遍。 */
-  function stretchText(count, every) {
+  /** 久坐提醒的措辞：轮换几套，避免一天里同一句话刷八遍。 */  function stretchText(count, every) {
     // 每条都带一个「现在就能做」的具体动作：光说「起来走走」对肩颈酸痛没用，
     // 说了做哪三下才会真的做。控制在 120 字以内（桌宠气泡上限）。
     const lines = [
@@ -2677,6 +2800,67 @@ export function apply(ctx) {
       `歇 3 分钟：站起来踮脚 20 下，再抬头看远处 20 秒，别一直歪着脖子。`,
       `久坐提醒：肩膀往后绕 10 圈、再往前绕 10 圈，慢慢来不使劲。`,
       `站起来伸个懒腰，双手往上够 10 秒，重复 3 次，顺便深呼吸。`,
+    ]
+    return lines[(count - 1) % lines.length]
+  }
+
+  /**
+   * 喝水提醒：工作日按打卡时刻起算，每 waterEvery 分钟喊一次喝水。
+   *
+   * 和久坐提醒共用一套「锚在打卡时刻 + 跳过午休 + 只在工位时间段内」的规则，
+   * 但有一处额外避让：桌宠同一时刻只显示一句气泡，后者会顶掉前者。
+   * 所以如果刚刚（90 秒内）已经被久坐提醒叫过一次，这一拍就先让路、不更新计时器，
+   * 下一分钟再试——这样两句话不会撞在一起，只会差一分钟先后响。
+   */
+  async function maybeWater(now) {
+    const every = Number(store.config.waterEvery)
+    if (!Number.isFinite(every) || every <= 0) return
+    if (isWeekend(now)) return
+    const key = dateKeyOf(now)
+    const entry = dayEntry(store, key)
+    if (entry.checkin === null) return
+    const startAt = parseHm(store.config.waterStart)
+    const endAt = parseHm(store.config.waterEnd)
+    if (startAt === null || endAt === null) return
+    const minutes = now.getHours() * 60 + now.getMinutes()
+    // 静止时段跟久坐共用同一套判断，保证两边的窗口不会各自漂移
+    if (inQuiet(now)) {
+      resetReminderTimers(now, key)
+      return
+    }
+    if (minutes < startAt || minutes > endAt) return
+    const checkinAt = parseHm(entry.checkin)
+    const floor = checkinAt === null ? startAt : Math.max(startAt, checkinAt)
+    if (minutes < floor) return
+    const water = store.flags[key]?.water
+    if (!water || typeof water.lastTs !== 'number') {
+      store.flags[key] = { ...store.flags[key], water: { lastTs: now.getTime(), count: 0 } }
+      saveStore(store)
+      return
+    }
+    if (now.getTime() - water.lastTs < every * 60_000) return
+    // 让路：久坐刚响过就别紧跟着响，下一拍再来
+    const stretch = store.flags[key]?.stretch
+    if (stretch && typeof stretch.lastTs === 'number' && now.getTime() - stretch.lastTs < 90_000) return
+    const count = (Number(water.count) || 0) + 1
+    store.flags[key] = { ...store.flags[key], water: { lastTs: now.getTime(), count } }
+    saveStore(store)
+    const text = waterText(count, every)
+    await sayWithVoice(text, 'desktop', 40_000)
+    if (store.config.waterToIm === true && imOptIn()?.enabled === true) {
+      await imNotifier.send(`water:${key}:${count}`, `小鱼提醒：${text}`)
+    }
+  }
+
+  /** 喝水提醒的措辞：轮换，避免一天八遍同一句。 */
+  function waterText(count, every) {
+    const lines = [
+      `又 ${every} 分钟啦，喝几口水吧——顺手把杯子加满，省得等下懒得去接。`,
+      `喝水时间到。别一口气灌，慢慢喝半杯，剩下的放在手边慢慢喝完。`,
+      `该补水了。喝完正好站起来走两步，顺便看看窗外放松眼睛。`,
+      `提醒你喝水：今天别只靠咖啡和茶，白开水也要喝够。`,
+      `喝口水吧。脖子发紧有一部分就是水喝少了，血液黏了肌肉更容易僵。`,
+      `又到点了，起来接杯水——这一趟也算活动，肩膀能松一点。`,
     ]
     return lines[(count - 1) % lines.length]
   }
@@ -2733,6 +2917,16 @@ export function apply(ctx) {
     const minutes = now.getHours() * 60 + now.getMinutes()
     const flags = store.flags[key] ?? {}
 
+    /**
+     * 静止时段（默认 12:30-14:00）里一条提醒都不发——用户这时候在吃饭、趴桌子午睡，
+     * 被吵醒比漏一条提醒糟得多。所以不是在各个分支里各加一遍判断，而是在这里统一拦掉：
+     * 久坐、喝水、写记录、待办到期、周报补发全部让路，计时器推到当前、出窗口重新起算。
+     */
+    if (inQuiet(now)) {
+      resetReminderTimers(now, key)
+      return
+    }
+
     const im = imOptIn()
     if (im?.enabled === true && Number.isFinite(im.delayedTestAt) && now.getTime() >= im.delayedTestAt && now.getTime() - im.delayedTestAt < 10 * 60_000) {
       if (claimImTest('delayedTestClaimed')) void notifyReminder('delayed-test-v1', '小鱼延迟提醒测试：这条消息是电脑到时间后主动发出的。若 iPhone 锁屏也收到了通知，说明当前双端提醒链路跑通啦。')
@@ -2741,6 +2935,9 @@ export function apply(ctx) {
     // 久坐提醒：只在「当天已打卡 + 工作日 + 落在 stretchStart~stretchEnd」时才累计，
     // 用打卡时刻做锚点，每 stretchEvery 分钟提醒一次，跨过午休不补计数。
     await maybeStretch(now)
+
+    // 喝水提醒：跟久坐错开间隔，且久坐刚响过就让路（气泡只能显示一条，撞上会互相顶掉）
+    await maybeWater(now)
 
     // 上次周报没推出去的话，到这里每 10 分钟补试一次
     await retryWeeklyPush(now)
@@ -2895,7 +3092,7 @@ export function apply(ctx) {
             'action=status 查看今天打卡、今天记录、本周概况、连续出勤；' +
             'action=week 输出本周可复盘的详细统计并写出周报文件，style=stat 出统计表（默认），style=article 出成文版（可直接发公众号）；' +
             'action=week_send 不但生成周报，还把正文直接推到用户微信（长文自动分片），用于「现在就把周报发我」；' +
-            'action=config 修改配置，可选 reminder_time / baseline / weekly_time / weekly_day / adopt_untimed_todos / report_copy_dir / stretch_every / stretch_start / stretch_end / stretch_to_im；adopt_untimed_todos=true 表示把桌宠待办里没设截止时间的条目自动收进「想学的」池子（默认开），带截止时间的限期任务不动；report_copy_dir 设了之后每份周报除了插件归档，还会往那个目录（如桌面）另存一份；stretch_every=久坐提醒间隔分钟数（0 关，默认 50），stretch_start/stretch_end 是提醒时段（默认 09:30-18:00，12:00-13:30 午休自动跳过），stretch_to_im=久坐提醒是否也推微信（默认 false，只弹桌宠气泡）；' +
+            'action=config 修改配置，可选 reminder_time / baseline / weekly_time / weekly_day / adopt_untimed_todos / report_copy_dir / stretch_every / stretch_start / stretch_end / stretch_to_im / water_every / water_start / water_end / water_to_im / quiet_start / quiet_end；adopt_untimed_todos=true 表示把桌宠待办里没设截止时间的条目自动收进「想学的」池子（默认开），带截止时间的限期任务不动；report_copy_dir 设了之后每份周报除了插件归档，还会往那个目录（如桌面）另存一份；stretch_every=久坐提醒间隔分钟数（0 关，默认 50），stretch_start/stretch_end 是提醒时段（默认 09:30-18:00），stretch_to_im=久坐提醒是否也推微信（默认 false，只弹桌宠气泡）；water_every=喝水提醒间隔分钟数（0 关，默认 60），water_start/water_end 是喝水提醒时段（默认 09:30-21:00），water_to_im=喝水提醒是否也推微信（默认 false）；quiet_start/quiet_end=静止时段（默认 12:30,18:30 与 14:00,19:30，即午饭午睡和晚饭两段），这段时间一条提醒都不发，多段用逗号分隔、起止一一对应；所有提醒只在工作日发，不动周末；' +
             'action=plan_add 往「想学的池子」里丢一条，text 是想学的东西（想到什么丢什么），可选 due_at 给个截止时间（"2026-11-20 10:20" 或毫秒时间戳）；这条清单已和桌宠「待办事项」合并，带截止时间的会投影成带日期待办，到点桌宠会分档提醒；' +
             'action=plan_list 看池子里有什么（未完成的在前）；' +
             'action=plan_today 看今天划掉了几条、池子里还剩什么；' +
@@ -2971,6 +3168,18 @@ export function apply(ctx) {
                 type: 'boolean',
                 description: 'action=config：久坐提醒是否同时推到微信（默认 false，只弹桌宠气泡，免得一天十几条）。',
               },
+              water_every: {
+                type: 'number',
+                description: 'action=config：喝水提醒间隔分钟数，0 关闭（默认 60）。按当天打卡时刻起算，工作日有效，静止时段内不发。',
+              },
+              water_start: { type: 'string', description: 'action=config：喝水提醒最早时刻 HH:MM（默认 09:30）。' },
+              water_end: { type: 'string', description: 'action=config：喝水提醒最晚时刻 HH:MM（默认 21:00）。' },
+              water_to_im: {
+                type: 'boolean',
+                description: 'action=config：喝水提醒是否同时推到微信（默认 false，只出声弹泡）。',
+              },
+              quiet_start: { type: 'string', description: 'action=config：静止时段起点 HH:MM，这段时间一条提醒都不发（默认 12:30,18:30）。多段用逗号分隔，和 quiet_end 一一对应。' },
+              quiet_end: { type: 'string', description: 'action=config：静止时段终点 HH:MM（默认 14:00,19:30）。多段用逗号分隔。' },
             },
             required: ['action'],
             additionalProperties: false,
@@ -3038,6 +3247,12 @@ export function apply(ctx) {
                 stretchStart: args?.stretch_start,
                 stretchEnd: args?.stretch_end,
                 stretchToIm: args?.stretch_to_im,
+                waterEvery: args?.water_every,
+                waterStart: args?.water_start,
+                waterEnd: args?.water_end,
+                waterToIm: args?.water_to_im,
+                quietStart: args?.quiet_start,
+                quietEnd: args?.quiet_end,
               }).text
             }
             if (action === 'profile') return updateProfile(args?.profile_action, args?.text).text

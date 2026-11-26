@@ -239,4 +239,26 @@ node tools/patch-pet-todo-tall.mjs --restore  # 用 .pre-todotall.orig 还原
 
 标记 `/* dsh-pet-todo-tall v1 */`、备份后缀 `.pre-todotall.orig`。锚点共 5 处（`LIST_ROWS`、`capListHeight`、`renderItem`、滚动条 CSS、徽章 CSS），每处必须恰好命中一次，否则报错退出、不写文件——dsh-pet 升级改了结构时会在这里拦住。
 
+## 待办面板：排序、图标宽度、行数、卡死（本地补丁）
+
+`tools/patch-pet-todo-ui.mjs`，在 tall 补丁之上继续改五处：
+
+| 改动 | 为什么 |
+| --- | --- |
+| `sortTodos` / `sortTodoItems` 的 `a.createdAt - b.createdAt` → `b.createdAt - a.createdAt` | 没有截止时间的待办原来旧的在前，新加的直接沉底 |
+| ✎/⏰/✕ 三个按钮内边距与最小宽度收窄，行内 `gap` `.462em` → `.3em` | 三个图标在原面板里占了近三分之一宽，正文被挤得只剩几个字 |
+| `LIST_ROWS` 6 → 5 | 6 行时面板底部压到桌宠身上 |
+| `AbortSignal.timeout(20000)` → `8000` | 保存请求卡住时禁用输入的时间太长 |
+| `mutate` 改成 try/finally，忙碌时给出「正在保存上一条」提示 | 原来 `busy` 只有一条下降路径、且点击被静默吞掉，对话生成期间点待办像「点了没反应」 |
+
+**排序那条改在宿主**（`lib/index.js` 的 `sortTodos`）：`/todos` 返回的顺序就是两端显示的顺序，网页端 bundle 里根本没有排序函数（被 tree-shake 掉了）。所以这条要等 DSH 重新加载插件或重启 DSH 才生效，只重启桌宠窗口不够；其余四条只改客户端，`POST /dsh-pet-7340/reload` 加刷新页面即可。
+
+```bash
+node tools/patch-pet-todo-ui.mjs            # 打补丁（幂等）
+node tools/patch-pet-todo-ui.mjs --check    # 只看状态
+node tools/patch-pet-todo-ui.mjs --restore  # 用 .pre-todoui.orig 还原
+```
+
+标记 `/* dsh-pet-todo-ui v1 */`、备份后缀 `.pre-todoui.orig`。每个文件要求改动集合完全命中（宿主只要排序一条，桌面端 `shared-core.js` 要全部五条，网页端 `client.js` 要除排序外的四条），任何一处锚点缺失或重复都整体放弃、不写文件。
+
 

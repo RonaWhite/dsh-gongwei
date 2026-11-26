@@ -353,20 +353,32 @@ node tools/patch-pet-todo.mjs --restore  # 还原
 
 ### 顺带：让待办面板一次看到更多条
 
-原生面板把清单高度写死成「行高 × 2」，十几条待办一次只露两行，往下翻很别扭。`tools/patch-pet-todo-tall.mjs` 做三件事：
+原生面板把清单高度写死成「行高 × 2」，十几条待办一次只露两行，往下翻很别扭。两个脚本分工：`patch-pet-todo-tall.mjs` 管「能看见多少条」，`patch-pet-todo-ui.mjs` 管「一条占多宽、按什么顺序排、保存卡住怎么办」。
 
-- 行数 2 → 6，并按可视高度再夹一次（最少保留 2 行），高窗口多看、矮窗口不顶出屏幕；
+`patch-pet-todo-tall.mjs`：
+
+- 行数 2 → 6（`patch-pet-todo-ui.mjs` 会把它再收到 5，见下）；
 - 「无期限」这类没信息量的副标题不再占行，只有带截止时间（或已完成）的才显示——大多数条目从两行变一行，同样高度能装的条目翻倍；
 - 给清单加一条常驻的细滚动条，一眼看出「下面还有」；
 - 顺带把正文里的 `[想学] ` 前缀渲染成一个小徽章，不再当文字占宽度。
+
+`patch-pet-todo-ui.mjs`：
+
+- **没有截止时间的待办按新添加的在最前面**（原生是旧的在前，越新的越往下）；
+- 右侧三个图标（✎ 改正文 / ⏰ 改期限 / ✕ 删）收窄、行内间距收紧，把宽度还给正文；
+- 清单 6 行 → 5 行，避免面板一直顶到桌宠身上；
+- 保存请求超时 20 秒 → 8 秒，且忙碌态一定复位、一定给提示——对话正在生成时点待办不会再像「点了没反应」。
 
 ```bash
 node tools/patch-pet-todo-tall.mjs            # 打补丁（幂等）
 node tools/patch-pet-todo-tall.mjs --check    # 只看状态
 node tools/patch-pet-todo-tall.mjs --restore  # 还原
+node tools/patch-pet-todo-ui.mjs              # 同上三种模式，参数一致
 ```
 
-标记 `/* dsh-pet-todo-tall v1 */`、备份 `.pre-todotall.orig`。清单涨到 6 行仍在面板预留的高度预算内（`TODO_PANEL_METRICS` 取「清单+提示」与日历的较大值），所以桌宠窗口的上边距不用跟着改。
+标记分别是 `/* dsh-pet-todo-tall v1 */` 与 `/* dsh-pet-todo-ui v1 */`，备份后缀 `.pre-todotall.orig` / `.pre-todoui.orig`。清单 5 行仍在面板预留的高度预算内（`TODO_PANEL_METRICS` 取「清单+提示」与日历的较大值），所以桌宠窗口的上边距不用跟着改。
+
+注意排序那一条改的是**宿主**（`lib/index.js` 里的 `sortTodos`）——`/todos` 返回什么顺序，两端就显示什么顺序。宿主那半边要等 DSH 重新加载插件（或重启 DSH）才生效，只重启桌宠窗口不够。
 
 ## 成长手记与编号气泡
 
