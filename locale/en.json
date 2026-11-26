@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "Desk check-in",
+    "description": "Checks you in at your desk on weekdays, compares the arrival time with a fixed baseline and your recent average, and tracks how many workdays in a row you have shown up. It nudges you to write down what you studied and how you felt (kept separately). It also keeps a wishlist of things you want to learn: drop an idea in without scheduling it, tick it off when you are done, and that tick writes a study-log entry for the day. On Friday it produces two reports: a statistics sheet and a prose version ready to post. Every record is kept on disk and folded into the conversation context. Available from the desktop pet's context menu, the /gongwei command, and the \"Wishlist\" and \"Journal\" panels in DSH settings; the pet bubble shows a model-compressed summary while the full text lives in the \"Journal\" panel.",
+    "detail": "docs/DETAIL.md"
+  }
+}

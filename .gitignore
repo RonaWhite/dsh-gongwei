@@ -1,0 +1,21 @@
+# 依赖
+node_modules/
+
+# 本机补丁脚本留下的备份（dsh-pet 原始文件，不该进仓库）
+*.orig
+*.pre-*.orig
+
+# 编辑器 / 系统
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# 手动备份的代码副本
+*.bak
+*.bak-*
+
+# 你的个人数据（正常情况下在 $DSH_HOME/dsh-gongwei/，不在本目录；
+# 这里写一遍是防止有人在插件目录里试跑时误提交）
+state.json
+reports/
